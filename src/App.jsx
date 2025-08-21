@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 const SUPABASE_URL = 'https://lwzvagkpesqdvzrqdbje.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3enZhZ2twZXNxZHZ6cnFkYmplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3NTc2NDQsImV4cCI6MjA3MTMzMzY0NH0.XGtkDvrcW8apmaaaxeNZ6C97Ns7w1W5Hmviz6nA1nyw';
 
-// Simple Supabase client implementation
+// Corrected SupabaseClient implementation
 class SupabaseClient {
   constructor(url, key) {
     this.url = url;
@@ -43,9 +43,10 @@ class SupabaseClient {
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
-    if (data.user) {
+    if (data.access_token) {
+      // Correctly assign user and session from the sign-in response
       this.auth.user = data.user;
-      this.auth.session = data.session;
+      this.auth.session = { access_token: data.access_token, refresh_token: data.refresh_token };
     }
     return { data, error: data.error };
   }
@@ -60,7 +61,6 @@ class SupabaseClient {
     return this.auth.user;
   }
 
-  // Simple table operations
   from(table) {
     return new SupabaseTable(this, table);
   }
@@ -727,7 +727,7 @@ const TodoApp = () => {
       <div style={styles.app}>
         <div style={styles.authContainer}>
           <div style={styles.authCard}>
-            <h1 style={styles.authTitle}>✨ Todo Flow</h1>
+            <h1 style={styles.authTitle}>🗃️ Todo Flow</h1>
             <p style={styles.authSubtitle}>
               {authMode === 'signin' ? 'Welcome back!' : 'Create your account'}
             </p>
@@ -803,13 +803,13 @@ const TodoApp = () => {
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.userInfo}>
-            <span>👋 {user.email}</span>
+            <span>💁‍♂️ {user.email}</span>
             <button onClick={handleSignOut} style={styles.signOutButton}>
               Sign Out
             </button>
           </div>
           <h1 style={styles.title}>
-            ✨ Todo Flow
+            🗃️ Todo Flow
           </h1>
           <p style={styles.subtitle}>Stay organized, stay productive</p>
         </div>
