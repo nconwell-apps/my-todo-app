@@ -33,8 +33,8 @@ class SupabaseClient {
     return { data, error: data.error };
   }
 
-// Corrected signIn function in SupabaseClient
-async signIn(email, password) {
+  // Corrected signIn function in SupabaseClient
+  async signIn(email, password) {
   // Directly use the /auth/v1/token endpoint with grant_type=password
   const response = await fetch(`${this.url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -43,19 +43,19 @@ async signIn(email, password) {
           'apikey': this.key
       },
       body: JSON.stringify({ email, password })
-  });
-  const data = await response.json();
+    });
+    const data = await response.json();
 
-  // If the token is successfully received, the API also sends user data.
-  if (response.ok) {
+    // If the token is successfully received, the API also sends user data.
+    if (response.ok) {
       this.auth.user = data.user;
-      // CORRECTED LINE: Store the access_token and other session data under a session object
-      this.auth.session = { access_token: data.access_token, refresh_token: data.refresh_token }; 
+      // This line is the key fix. It sets the session object correctly.
+      this.auth.session = { access_token: data.access_token };
       return { data: { user: data.user, session: data }, error: null };
-  } else {
+    } else {
       return { data: null, error: data.msg || 'Sign in failed.' };
+    }
   }
-}
 
   async signOut() {
     this.auth.user = null;
