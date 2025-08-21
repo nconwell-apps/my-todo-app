@@ -184,21 +184,28 @@ class SupabaseTable {
       }
     });
     
-    const response = await fetch(url, {
-      headers: {
-        'apikey': this.client.key,
-        'Authorization': `Bearer ${this.client.auth.session?.access_token}`
-      }
-    });
-    
-    const result = await response.json();
-    console.log('🔥 FETCH RESPONSE:', {
-      status: response.status,
-      ok: response.ok,
-      result: result
-    });
-    
-    return { data: result, error: response.ok ? null : result };
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'apikey': this.client.key,
+          'Authorization': `Bearer ${this.client.auth.session?.access_token}`
+        }
+      });
+      
+      console.log('🔥 FETCH RESPONSE STATUS:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
+      
+      const result = await response.json();
+      console.log('🔥 FETCH RESPONSE DATA:', result);
+      
+      return { data: result, error: response.ok ? null : result };
+    } catch (fetchError) {
+      console.error('🔥 FETCH EXCEPTION:', fetchError);
+      return { data: null, error: { message: fetchError.message } };
+    }
   }
 }
 
