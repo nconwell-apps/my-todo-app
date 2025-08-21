@@ -664,28 +664,33 @@ const TodoApp = () => {
     addDebug(`Loading todos for user ID: ${user.id}`);
     
     try {
-      const { data, error } = await supabase
-        .from('todos')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', false);
+      // TEMPORARY FIX: Use direct fetch instead of custom Supabase client
+      const url = `${SUPABASE_URL}/rest/v1/todos?select=*&user_id=eq.${user.id}&order=created_at.desc`;
+      addDebug(`Direct loadTodos URL: ${url}`);
       
-      addDebug(`Raw loadTodos response - data: ${JSON.stringify(data)}, error: ${JSON.stringify(error)}`);
+      const response = await fetch(url, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${supabase.auth.session?.access_token}`
+        }
+      });
       
-      if (error) {
-        addDebug(`Load todos error: ${JSON.stringify(error)}`);
-      }
+      addDebug(`Direct loadTodos status: ${response.status} ${response.statusText}`);
       
-      if (data) {
-        addDebug(`Todos loaded: ${data.length} items - ${JSON.stringify(data)}`);
+      if (response.ok) {
+        const data = await response.json();
+        addDebug(`Direct loadTodos success: ${data.length} todos loaded`);
         setTodos(data);
       } else {
-        addDebug('No data returned from loadTodos - data is null/undefined');
+        const errorData = await response.json();
+        addDebug(`Direct loadTodos error: ${JSON.stringify(errorData)}`);
         setTodos([]);
       }
+      
     } catch (fetchError) {
       addDebug(`Exception in loadTodos: ${fetchError.message}`);
       console.error('LoadTodos exception:', fetchError);
+      setTodos([]);
     }
   };
 
