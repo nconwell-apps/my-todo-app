@@ -33,7 +33,6 @@ class SupabaseClient {
     return { data, error: data.error };
   }
 
- // Corrected signIn function in SupabaseClient
 // Corrected signIn function in SupabaseClient
 async signIn(email, password) {
   // Directly use the /auth/v1/token endpoint with grant_type=password
@@ -50,7 +49,8 @@ async signIn(email, password) {
   // If the token is successfully received, the API also sends user data.
   if (response.ok) {
       this.auth.user = data.user;
-      this.auth.session = data; // Store the full response which contains the access_token
+      // CORRECTED LINE: Store the access_token and other session data under a session object
+      this.auth.session = { access_token: data.access_token, refresh_token: data.refresh_token }; 
       return { data: { user: data.user, session: data }, error: null };
   } else {
       return { data: null, error: data.msg || 'Sign in failed.' };
