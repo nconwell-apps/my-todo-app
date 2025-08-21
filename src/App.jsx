@@ -610,7 +610,8 @@ const TodoApp = () => {
         text: newTodo.trim(),
         completed: false,
         priority: 'medium',
-        user_id: user.id
+        user_id: user.id,
+        created_at: new Date().toISOString()
       };
 
       const { data, error } = await supabase
