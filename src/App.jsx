@@ -99,7 +99,8 @@ const TodoApp = () => {
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      fontSize: '1rem'
+      fontSize: '1rem',
+      transition: 'background-color 0.2s ease, transform 0.1s ease'
     },
     filters: {
       display: 'flex',
@@ -397,7 +398,18 @@ const TodoApp = () => {
               placeholder="Add a new todo..."
               style={styles.todoInput}
             />
-            <button onClick={addTodo} style={styles.addButton}>
+            <button 
+              onClick={addTodo} 
+              style={styles.addButton}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#0f766e';
+                e.target.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#0d9488';
+                e.target.style.transform = 'translateY(0)';
+              }}
+            >
               <span style={{fontSize: '1.25rem'}}>+</span>
               Add
             </button>
@@ -509,7 +521,7 @@ const TodoApp = () => {
         {/* Footer */}
         <div style={styles.footer}>
           <p>Built with React + CSS</p>
-          <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Ready for deployment to Vercel</p>
+          <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Built by nconwell 20/08/2025</p>
         </div>
       </div>
     </div>
