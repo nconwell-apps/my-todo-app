@@ -33,23 +33,41 @@ class SupabaseClient {
     return { data, error: data.error };
   }
 
-  async signIn(email, password) {
-    const response = await fetch(`${this.url}/auth/v1/token?grant_type=password`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': this.key
-      },
-      body: JSON.stringify({ email, password })
+ // Corrected signIn function in SupabaseClient
+async signIn(email, password) {
+    // First, get the access token
+    const tokenResponse = await fetch(`${this.url}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'apikey': this.key
+        },
+        body: JSON.stringify({ email, password })
     });
-    const data = await response.json();
-    if (data.access_token) {
-      // Correctly assign user and session from the sign-in response
-      this.auth.user = data.user;
-      this.auth.session = { access_token: data.access_token, refresh_token: data.refresh_token };
+    const tokenData = await tokenResponse.json();
+
+    if (tokenData.access_token) {
+        // Now that we have the access token, get the user info
+        const userResponse = await fetch(`${this.url}/auth/v1/user`, {
+            method: 'GET',
+            headers: {
+                'apikey': this.key,
+                'Authorization': `Bearer ${tokenData.access_token}`
+            }
+        });
+        const userData = await userResponse.json();
+
+        if (userResponse.ok) {
+            this.auth.user = userData;
+            this.auth.session = { access_token: tokenData.access_token, refresh_token: tokenData.refresh_token };
+            return { data: { user: userData, session: this.auth.session }, error: null };
+        } else {
+            return { data: null, error: userData.msg || 'Failed to retrieve user data.' };
+        }
+    } else {
+        return { data: null, error: tokenData.msg || 'Sign in failed.' };
     }
-    return { data, error: data.error };
-  }
+}
 
   async signOut() {
     this.auth.user = null;
