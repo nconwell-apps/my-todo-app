@@ -97,6 +97,17 @@ class SupabaseTable {
   }
 
   async insert(data) {
+    console.log('🔥 INSERT REQUEST:', {
+      url: `${this.client.url}/rest/v1/${this.table}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': this.client.key,
+        'Authorization': `Bearer ${this.client.auth.session?.access_token}`,
+        'Prefer': 'return=representation'
+      },
+      body: data
+    });
+
     const response = await fetch(`${this.client.url}/rest/v1/${this.table}`, {
       method: 'POST',
       headers: {
@@ -107,7 +118,14 @@ class SupabaseTable {
       },
       body: JSON.stringify(data)
     });
+    
     const result = await response.json();
+    console.log('🔥 INSERT RESPONSE:', {
+      status: response.status,
+      ok: response.ok,
+      result: result
+    });
+    
     return { data: result, error: response.ok ? null : result };
   }
 
@@ -158,13 +176,28 @@ class SupabaseTable {
       url += `&order=${this.orderBy}`;
     }
     
+    console.log('🔥 FETCH REQUEST:', {
+      url: url,
+      headers: {
+        'apikey': this.client.key,
+        'Authorization': `Bearer ${this.client.auth.session?.access_token}`
+      }
+    });
+    
     const response = await fetch(url, {
       headers: {
         'apikey': this.client.key,
         'Authorization': `Bearer ${this.client.auth.session?.access_token}`
       }
     });
+    
     const result = await response.json();
+    console.log('🔥 FETCH RESPONSE:', {
+      status: response.status,
+      ok: response.ok,
+      result: result
+    });
+    
     return { data: result, error: response.ok ? null : result };
   }
 }
@@ -187,7 +220,10 @@ const TodoApp = () => {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
 
-  // Styles
+  // Debug state
+  const [debugInfo, setDebugInfo] = useState('');
+
+  // Styles (same as before but with debug panel)
   const styles = {
     app: {
       minHeight: '100vh',
@@ -200,7 +236,19 @@ const TodoApp = () => {
       maxWidth: '768px',
       margin: '0 auto'
     },
-    // Auth styles
+    debugPanel: {
+      backgroundColor: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: '8px',
+      padding: '16px',
+      marginBottom: '24px',
+      fontSize: '0.875rem',
+      fontFamily: 'monospace',
+      whiteSpace: 'pre-wrap',
+      maxHeight: '200px',
+      overflow: 'auto'
+    },
+    // ... (all other styles remain the same)
     authContainer: {
       maxWidth: '400px',
       margin: '0 auto',
@@ -265,7 +313,6 @@ const TodoApp = () => {
       fontSize: '0.875rem',
       marginTop: '8px'
     },
-    // App styles (existing)
     header: {
       textAlign: 'center',
       marginBottom: '32px',
@@ -533,16 +580,24 @@ const TodoApp = () => {
     }
   };
 
+  const addDebug = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setDebugInfo(prev => `[${timestamp}] ${message}\n${prev}`);
+  };
+
   // Check for existing session on mount
   useEffect(() => {
-    // In a real app, you'd check for an existing session here
+    addDebug('App initialized');
     setLoading(false);
   }, []);
 
   // Load todos when user is authenticated
   useEffect(() => {
     if (user) {
+      addDebug(`User authenticated: ${user.email} (ID: ${user.id})`);
       loadTodos();
+    } else {
+      addDebug('No user found');
     }
   }, [user]);
 
@@ -551,12 +606,15 @@ const TodoApp = () => {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError('');
+    addDebug(`Attempting signup for: ${email}`);
 
     const { data, error } = await supabase.signUp(email, password);
     
     if (error) {
+      addDebug(`Signup error: ${error.message || error}`);
       setAuthError(error.message || 'Sign up failed');
     } else {
+      addDebug(`Signup successful: ${JSON.stringify(data.user)}`);
       setUser(data.user);
     }
     
@@ -567,12 +625,15 @@ const TodoApp = () => {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError('');
+    addDebug(`Attempting signin for: ${email}`);
 
     const { data, error } = await supabase.signIn(email, password);
     
     if (error) {
+      addDebug(`Signin error: ${error.message || error}`);
       setAuthError(error.message || 'Sign in failed');
     } else {
+      addDebug(`Signin successful: ${JSON.stringify(data.user)}`);
       setUser(data.user);
     }
     
@@ -580,6 +641,7 @@ const TodoApp = () => {
   };
 
   const handleSignOut = async () => {
+    addDebug('Signing out');
     await supabase.signOut();
     setUser(null);
     setTodos([]);
@@ -587,7 +649,12 @@ const TodoApp = () => {
 
   // Todo functions with Supabase integration
   const loadTodos = async () => {
-    if (!user) return;
+    if (!user) {
+      addDebug('Cannot load todos - no user');
+      return;
+    }
+    
+    addDebug(`Loading todos for user ID: ${user.id}`);
     
     const { data, error } = await supabase
       .from('todos')
@@ -596,11 +663,15 @@ const TodoApp = () => {
       .order('created_at', false);
     
     if (error) {
-        console.error('Error fetching todos:', error); // Add this line
+      addDebug(`Load todos error: ${JSON.stringify(error)}`);
     }
     
-    if (data && !error) {
+    if (data) {
+      addDebug(`Todos loaded: ${data.length} items - ${JSON.stringify(data)}`);
       setTodos(data);
+    } else {
+      addDebug('No data returned from loadTodos');
+      setTodos([]);
     }
   };
 
@@ -614,11 +685,16 @@ const TodoApp = () => {
         created_at: new Date().toISOString()
       };
 
+      addDebug(`Adding todo: ${JSON.stringify(todo)}`);
+
       const { data, error } = await supabase
         .from('todos')
         .insert([todo]);
 
-      if (!error) {
+      if (error) {
+        addDebug(`Add todo error: ${JSON.stringify(error)}`);
+      } else {
+        addDebug(`Todo added successfully: ${JSON.stringify(data)}`);
         await loadTodos(); // Refresh the list
         setNewTodo('');
       }
@@ -628,6 +704,8 @@ const TodoApp = () => {
   const toggleTodo = async (id) => {
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
+
+    addDebug(`Toggling todo ${id} to ${!todo.completed}`);
 
     const { error } = await supabase
       .from('todos')
@@ -639,10 +717,14 @@ const TodoApp = () => {
         playCompletionSound();
       }
       await loadTodos();
+    } else {
+      addDebug(`Toggle todo error: ${JSON.stringify(error)}`);
     }
   };
 
   const deleteTodo = async (id) => {
+    addDebug(`Deleting todo ${id}`);
+
     const { error } = await supabase
       .from('todos')
       .delete()
@@ -650,6 +732,8 @@ const TodoApp = () => {
 
     if (!error) {
       await loadTodos();
+    } else {
+      addDebug(`Delete todo error: ${JSON.stringify(error)}`);
     }
   };
 
@@ -660,6 +744,8 @@ const TodoApp = () => {
 
   const saveEdit = async () => {
     if (editText.trim()) {
+      addDebug(`Saving edit for todo ${editingId}: ${editText}`);
+
       const { error } = await supabase
         .from('todos')
         .update({ text: editText.trim() })
@@ -667,6 +753,8 @@ const TodoApp = () => {
 
       if (!error) {
         await loadTodos();
+      } else {
+        addDebug(`Save edit error: ${JSON.stringify(error)}`);
       }
     }
     setEditingId(null);
@@ -674,6 +762,8 @@ const TodoApp = () => {
   };
 
   const setPriority = async (id, priority) => {
+    addDebug(`Setting priority for todo ${id}: ${priority}`);
+
     const { error } = await supabase
       .from('todos')
       .update({ priority })
@@ -681,6 +771,8 @@ const TodoApp = () => {
 
     if (!error) {
       await loadTodos();
+    } else {
+      addDebug(`Set priority error: ${JSON.stringify(error)}`);
     }
   };
 
@@ -803,6 +895,16 @@ const TodoApp = () => {
             </div>
           </div>
         </div>
+
+        {/* Debug panel for auth screen too */}
+        {debugInfo && (
+          <div style={styles.container}>
+            <div style={styles.debugPanel}>
+              <strong>Debug Log:</strong><br />
+              {debugInfo}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -811,6 +913,16 @@ const TodoApp = () => {
   return (
     <div style={styles.app}>
       <div style={styles.container}>
+        {/* Debug Panel */}
+        <div style={styles.debugPanel}>
+          <strong>Debug Log:</strong><br />
+          Current todos count: {todos.length}<br />
+          User ID: {user?.id}<br />
+          Session token: {supabase.auth.session?.access_token ? 'Present' : 'Missing'}<br />
+          <br />
+          {debugInfo}
+        </div>
+
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.userInfo}>
