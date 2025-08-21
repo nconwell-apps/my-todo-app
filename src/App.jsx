@@ -656,22 +656,29 @@ const TodoApp = () => {
     
     addDebug(`Loading todos for user ID: ${user.id}`);
     
-    const { data, error } = await supabase
-      .from('todos')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', false);
-    
-    if (error) {
-      addDebug(`Load todos error: ${JSON.stringify(error)}`);
-    }
-    
-    if (data) {
-      addDebug(`Todos loaded: ${data.length} items - ${JSON.stringify(data)}`);
-      setTodos(data);
-    } else {
-      addDebug('No data returned from loadTodos');
-      setTodos([]);
+    try {
+      const { data, error } = await supabase
+        .from('todos')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', false);
+      
+      addDebug(`Raw loadTodos response - data: ${JSON.stringify(data)}, error: ${JSON.stringify(error)}`);
+      
+      if (error) {
+        addDebug(`Load todos error: ${JSON.stringify(error)}`);
+      }
+      
+      if (data) {
+        addDebug(`Todos loaded: ${data.length} items - ${JSON.stringify(data)}`);
+        setTodos(data);
+      } else {
+        addDebug('No data returned from loadTodos - data is null/undefined');
+        setTodos([]);
+      }
+    } catch (fetchError) {
+      addDebug(`Exception in loadTodos: ${fetchError.message}`);
+      console.error('LoadTodos exception:', fetchError);
     }
   };
 
@@ -919,6 +926,41 @@ const TodoApp = () => {
           Current todos count: {todos.length}<br />
           User ID: {user?.id}<br />
           Session token: {supabase.auth.session?.access_token ? 'Present' : 'Missing'}<br />
+          
+          {/* Manual test buttons */}
+          <div style={{marginTop: '10px', display: 'flex', gap: '8px'}}>
+            <button 
+              onClick={loadTodos}
+              style={{...styles.authButton, padding: '4px 8px', fontSize: '0.8rem'}}
+            >
+              🔄 Reload Todos
+            </button>
+            <button 
+              onClick={async () => {
+                addDebug('Testing direct fetch...');
+                try {
+                  const url = `${SUPABASE_URL}/rest/v1/todos?select=*&user_id=eq.${user.id}`;
+                  addDebug(`Direct fetch URL: ${url}`);
+                  
+                  const response = await fetch(url, {
+                    headers: {
+                      'apikey': SUPABASE_ANON_KEY,
+                      'Authorization': `Bearer ${supabase.auth.session?.access_token}`
+                    }
+                  });
+                  
+                  addDebug(`Direct fetch status: ${response.status} ${response.statusText}`);
+                  const result = await response.json();
+                  addDebug(`Direct fetch result: ${JSON.stringify(result)}`);
+                } catch (err) {
+                  addDebug(`Direct fetch error: ${err.message}`);
+                }
+              }}
+              style={{...styles.authButton, padding: '4px 8px', fontSize: '0.8rem', backgroundColor: '#dc2626'}}
+            >
+              🧪 Test Direct Fetch
+            </button>
+          </div>
           <br />
           {debugInfo}
         </div>
