@@ -123,6 +123,7 @@ const TodoApp = () => {
   const [filter, setFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
+  const [addingTodo, setAddingTodo] = useState(false);
 
   // Styles
   const styles = {
@@ -466,8 +467,32 @@ const TodoApp = () => {
       textAlign: 'center',
       padding: '50px',
       fontSize: '1.5rem'
-    }
+    },
+    spinner: {
+  width: '16px',
+  height: '16px',
+  border: '2px solid transparent',
+  borderTop: '2px solid currentColor',
+  borderRadius: '50%',
+  animation: 'spin 1s linear infinite'
+},
   };
+
+  // Add spinner animation
+const spinnerKeyframes = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Inject the keyframes into the document
+if (typeof document !== 'undefined' && !document.getElementById('spinner-styles')) {
+  const style = document.createElement('style');
+  style.id = 'spinner-styles';
+  style.textContent = spinnerKeyframes;
+  document.head.appendChild(style);
+}
 
   // Check for existing session on mount
   useEffect(() => {
@@ -550,6 +575,8 @@ const TodoApp = () => {
 
   const addTodo = async () => {
     if (newTodo.trim() && user) {
+      setAddingTodo(true);  // Start loading
+
       const todo = {
         text: newTodo.trim(),
         completed: false,
@@ -564,6 +591,8 @@ const TodoApp = () => {
         await loadTodos();
         setNewTodo('');
       }
+
+      setAddingTodo(false);  // Stop loading
     }
   };
 
@@ -781,18 +810,35 @@ const TodoApp = () => {
             />
             <button 
               onClick={addTodo} 
-              style={styles.addButton}
-              onMouseEnter={(e) => {
+              disabled={addingTodo}
+              style={{
+              ...styles.addButton,
+              ...(addingTodo ? { backgroundColor: '#64748b', cursor: 'not-allowed' } : {})
+            }}
+            onMouseEnter={(e) => {
+              if (!addingTodo) {
                 e.target.style.backgroundColor = '#0f766e';
                 e.target.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!addingTodo) {
                 e.target.style.backgroundColor = '#0d9488';
                 e.target.style.transform = 'translateY(0)';
-              }}
+              }
+            }}
             >
-              <span style={{fontSize: '1.25rem'}}>+</span>
-              Add
+            {addingTodo ? (
+              <>
+                <div style={styles.spinner}></div>
+                Adding...
+              </>
+            ) : (
+              <>
+                <span style={{fontSize: '1.25rem'}}>+</span>
+                Add
+              </>
+            )}
             </button>
           </div>
         </div>
