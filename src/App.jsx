@@ -222,8 +222,9 @@ const TodoApp = () => {
       top: 0,
       right: 0,
       display: 'flex',
+      flexDirection: 'column',
       alignItems: 'center',
-      gap: '12px',
+      gap: '8px',
       color: '#64748b',
       fontSize: '0.875rem'
     },
