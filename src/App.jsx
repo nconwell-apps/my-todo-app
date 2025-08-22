@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 const SUPABASE_URL = 'https://lwzvagkpesqdvzrqdbje.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3enZhZ2twZXNxZHZ6cnFkYmplIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3NTc2NDQsImV4cCI6MjA3MTMzMzY0NH0.XGtkDvrcW8apmaaaxeNZ6C97Ns7w1W5Hmviz6nA1nyw';
 
-// Corrected SupabaseClient implementation
+// SupabaseClient implementation (simplified for auth only)
 class SupabaseClient {
   constructor(url, key) {
     this.url = url;
@@ -33,23 +33,19 @@ class SupabaseClient {
     return { data, error: data.error };
   }
 
-  // Corrected signIn function in SupabaseClient
   async signIn(email, password) {
-  // Directly use the /auth/v1/token endpoint with grant_type=password
-  const response = await fetch(`${this.url}/auth/v1/token?grant_type=password`, {
+    const response = await fetch(`${this.url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
       headers: {
-          'Content-Type': 'application/json',
-          'apikey': this.key
+        'Content-Type': 'application/json',
+        'apikey': this.key
       },
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
 
-    // If the token is successfully received, the API also sends user data.
     if (response.ok) {
       this.auth.user = data.user;
-      // This line is the key fix. It sets the session object correctly.
       this.auth.session = { access_token: data.access_token };
       return { data: { user: data.user, session: data }, error: null };
     } else {
@@ -67,145 +63,46 @@ class SupabaseClient {
     return this.auth.user;
   }
 
-  from(table) {
-    return new SupabaseTable(this, table);
-  }
-}
-
-class SupabaseTable {
-  constructor(client, table) {
-    this.client = client;
-    this.table = table;
-    this.selectFields = '*';
-    this.whereConditions = [];
-    this.orderBy = null;
-  }
-
-  select(fields = '*') {
-    this.selectFields = fields;
-    return this;
-  }
-
-  eq(column, value) {
-    this.whereConditions.push(`${column}=eq.${value}`);
-    return this;
-  }
-
-  order(column, ascending = true) {
-    this.orderBy = `${column}.${ascending ? 'asc' : 'desc'}`;
-    return this;
-  }
-
-  async insert(data) {
-    console.log('🔥 INSERT REQUEST:', {
-      url: `${this.client.url}/rest/v1/${this.table}`,
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': this.client.key,
-        'Authorization': `Bearer ${this.client.auth.session?.access_token}`,
-        'Prefer': 'return=representation'
-      },
-      body: data
-    });
-
-    const response = await fetch(`${this.client.url}/rest/v1/${this.table}`, {
+  // Simplified method for inserts only
+  async insertTodo(todo) {
+    const response = await fetch(`${this.url}/rest/v1/todos`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': this.client.key,
-        'Authorization': `Bearer ${this.client.auth.session?.access_token}`,
+        'apikey': this.key,
+        'Authorization': `Bearer ${this.auth.session?.access_token}`,
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(todo)
     });
-    
     const result = await response.json();
-    console.log('🔥 INSERT RESPONSE:', {
-      status: response.status,
-      ok: response.ok,
-      result: result
-    });
-    
     return { data: result, error: response.ok ? null : result };
   }
 
-  async update(data) {
-    let url = `${this.client.url}/rest/v1/${this.table}`;
-    if (this.whereConditions.length > 0) {
-      url += '?' + this.whereConditions.join('&');
-    }
-    
-    const response = await fetch(url, {
+  async updateTodo(id, updates) {
+    const response = await fetch(`${this.url}/rest/v1/todos?id=eq.${id}`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': this.client.key,
-        'Authorization': `Bearer ${this.client.auth.session?.access_token}`,
+        'apikey': this.key,
+        'Authorization': `Bearer ${this.auth.session?.access_token}`,
         'Prefer': 'return=representation'
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(updates)
     });
     const result = await response.json();
     return { data: result, error: response.ok ? null : result };
   }
 
-  async delete() {
-    let url = `${this.client.url}/rest/v1/${this.table}`;
-    if (this.whereConditions.length > 0) {
-      url += '?' + this.whereConditions.join('&');
-    }
-    
-    const response = await fetch(url, {
+  async deleteTodo(id) {
+    const response = await fetch(`${this.url}/rest/v1/todos?id=eq.${id}`, {
       method: 'DELETE',
       headers: {
-        'apikey': this.client.key,
-        'Authorization': `Bearer ${this.client.auth.session?.access_token}`
+        'apikey': this.key,
+        'Authorization': `Bearer ${this.auth.session?.access_token}`
       }
     });
     return { error: response.ok ? null : await response.json() };
-  }
-
-  async fetch() {
-    let url = `${this.client.url}/rest/v1/${this.table}?select=${this.selectFields}`;
-    
-    if (this.whereConditions.length > 0) {
-      url += '&' + this.whereConditions.join('&');
-    }
-    
-    if (this.orderBy) {
-      url += `&order=${this.orderBy}`;
-    }
-    
-    console.log('🔥 FETCH REQUEST:', {
-      url: url,
-      headers: {
-        'apikey': this.client.key,
-        'Authorization': `Bearer ${this.client.auth.session?.access_token}`
-      }
-    });
-    
-    try {
-      const response = await fetch(url, {
-        headers: {
-          'apikey': this.client.key,
-          'Authorization': `Bearer ${this.client.auth.session?.access_token}`
-        }
-      });
-      
-      console.log('🔥 FETCH RESPONSE STATUS:', {
-        status: response.status,
-        ok: response.ok,
-        statusText: response.statusText
-      });
-      
-      const result = await response.json();
-      console.log('🔥 FETCH RESPONSE DATA:', result);
-      
-      return { data: result, error: response.ok ? null : result };
-    } catch (fetchError) {
-      console.error('🔥 FETCH EXCEPTION:', fetchError);
-      return { data: null, error: { message: fetchError.message } };
-    }
   }
 }
 
@@ -215,7 +112,7 @@ const supabase = new SupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TodoApp = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [authMode, setAuthMode] = useState('signin'); // 'signin' or 'signup'
+  const [authMode, setAuthMode] = useState('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
@@ -227,10 +124,7 @@ const TodoApp = () => {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
 
-  // Debug state
-  const [debugInfo, setDebugInfo] = useState('');
-
-  // Styles (same as before but with debug panel)
+  // Styles
   const styles = {
     app: {
       minHeight: '100vh',
@@ -243,19 +137,6 @@ const TodoApp = () => {
       maxWidth: '768px',
       margin: '0 auto'
     },
-    debugPanel: {
-      backgroundColor: '#1e293b',
-      border: '1px solid #334155',
-      borderRadius: '8px',
-      padding: '16px',
-      marginBottom: '24px',
-      fontSize: '0.875rem',
-      fontFamily: 'monospace',
-      whiteSpace: 'pre-wrap',
-      maxHeight: '200px',
-      overflow: 'auto'
-    },
-    // ... (all other styles remain the same)
     authContainer: {
       maxWidth: '400px',
       margin: '0 auto',
@@ -587,24 +468,15 @@ const TodoApp = () => {
     }
   };
 
-  const addDebug = (message) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setDebugInfo(prev => `[${timestamp}] ${message}\n${prev}`);
-  };
-
   // Check for existing session on mount
   useEffect(() => {
-    addDebug('App initialized');
     setLoading(false);
   }, []);
 
   // Load todos when user is authenticated
   useEffect(() => {
     if (user) {
-      addDebug(`User authenticated: ${user.email} (ID: ${user.id})`);
       loadTodos();
-    } else {
-      addDebug('No user found');
     }
   }, [user]);
 
@@ -613,15 +485,12 @@ const TodoApp = () => {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError('');
-    addDebug(`Attempting signup for: ${email}`);
 
     const { data, error } = await supabase.signUp(email, password);
     
     if (error) {
-      addDebug(`Signup error: ${error.message || error}`);
       setAuthError(error.message || 'Sign up failed');
     } else {
-      addDebug(`Signup successful: ${JSON.stringify(data.user)}`);
       setUser(data.user);
     }
     
@@ -632,15 +501,12 @@ const TodoApp = () => {
     e.preventDefault();
     setAuthLoading(true);
     setAuthError('');
-    addDebug(`Attempting signin for: ${email}`);
 
     const { data, error } = await supabase.signIn(email, password);
     
     if (error) {
-      addDebug(`Signin error: ${error.message || error}`);
       setAuthError(error.message || 'Sign in failed');
     } else {
-      addDebug(`Signin successful: ${JSON.stringify(data.user)}`);
       setUser(data.user);
     }
     
@@ -648,25 +514,17 @@ const TodoApp = () => {
   };
 
   const handleSignOut = async () => {
-    addDebug('Signing out');
     await supabase.signOut();
     setUser(null);
     setTodos([]);
   };
 
-  // Todo functions with Supabase integration
+  // Todo functions using direct fetch
   const loadTodos = async () => {
-    if (!user) {
-      addDebug('Cannot load todos - no user');
-      return;
-    }
-    
-    addDebug(`Loading todos for user ID: ${user.id}`);
+    if (!user) return;
     
     try {
-      // TEMPORARY FIX: Use direct fetch instead of custom Supabase client
       const url = `${SUPABASE_URL}/rest/v1/todos?select=*&user_id=eq.${user.id}&order=created_at.desc`;
-      addDebug(`Direct loadTodos URL: ${url}`);
       
       const response = await fetch(url, {
         headers: {
@@ -675,21 +533,16 @@ const TodoApp = () => {
         }
       });
       
-      addDebug(`Direct loadTodos status: ${response.status} ${response.statusText}`);
-      
       if (response.ok) {
         const data = await response.json();
-        addDebug(`Direct loadTodos success: ${data.length} todos loaded`);
         setTodos(data);
       } else {
-        const errorData = await response.json();
-        addDebug(`Direct loadTodos error: ${JSON.stringify(errorData)}`);
+        console.error('Failed to load todos');
         setTodos([]);
       }
       
-    } catch (fetchError) {
-      addDebug(`Exception in loadTodos: ${fetchError.message}`);
-      console.error('LoadTodos exception:', fetchError);
+    } catch (error) {
+      console.error('Error loading todos:', error);
       setTodos([]);
     }
   };
@@ -704,17 +557,10 @@ const TodoApp = () => {
         created_at: new Date().toISOString()
       };
 
-      addDebug(`Adding todo: ${JSON.stringify(todo)}`);
+      const { data, error } = await supabase.insertTodo(todo);
 
-      const { data, error } = await supabase
-        .from('todos')
-        .insert([todo]);
-
-      if (error) {
-        addDebug(`Add todo error: ${JSON.stringify(error)}`);
-      } else {
-        addDebug(`Todo added successfully: ${JSON.stringify(data)}`);
-        await loadTodos(); // Refresh the list
+      if (!error) {
+        await loadTodos();
         setNewTodo('');
       }
     }
@@ -724,35 +570,20 @@ const TodoApp = () => {
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
 
-    addDebug(`Toggling todo ${id} to ${!todo.completed}`);
-
-    const { error } = await supabase
-      .from('todos')
-      .update({ completed: !todo.completed })
-      .eq('id', id);
+    const { error } = await supabase.updateTodo(id, { completed: !todo.completed });
 
     if (!error) {
       if (!todo.completed) {
         playCompletionSound();
       }
       await loadTodos();
-    } else {
-      addDebug(`Toggle todo error: ${JSON.stringify(error)}`);
     }
   };
 
   const deleteTodo = async (id) => {
-    addDebug(`Deleting todo ${id}`);
-
-    const { error } = await supabase
-      .from('todos')
-      .delete()
-      .eq('id', id);
-
+    const { error } = await supabase.deleteTodo(id);
     if (!error) {
       await loadTodos();
-    } else {
-      addDebug(`Delete todo error: ${JSON.stringify(error)}`);
     }
   };
 
@@ -763,17 +594,9 @@ const TodoApp = () => {
 
   const saveEdit = async () => {
     if (editText.trim()) {
-      addDebug(`Saving edit for todo ${editingId}: ${editText}`);
-
-      const { error } = await supabase
-        .from('todos')
-        .update({ text: editText.trim() })
-        .eq('id', editingId);
-
+      const { error } = await supabase.updateTodo(editingId, { text: editText.trim() });
       if (!error) {
         await loadTodos();
-      } else {
-        addDebug(`Save edit error: ${JSON.stringify(error)}`);
       }
     }
     setEditingId(null);
@@ -781,17 +604,9 @@ const TodoApp = () => {
   };
 
   const setPriority = async (id, priority) => {
-    addDebug(`Setting priority for todo ${id}: ${priority}`);
-
-    const { error } = await supabase
-      .from('todos')
-      .update({ priority })
-      .eq('id', id);
-
+    const { error } = await supabase.updateTodo(id, { priority });
     if (!error) {
       await loadTodos();
-    } else {
-      addDebug(`Set priority error: ${JSON.stringify(error)}`);
     }
   };
 
@@ -914,16 +729,6 @@ const TodoApp = () => {
             </div>
           </div>
         </div>
-
-        {/* Debug panel for auth screen too */}
-        {debugInfo && (
-          <div style={styles.container}>
-            <div style={styles.debugPanel}>
-              <strong>Debug Log:</strong><br />
-              {debugInfo}
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -932,51 +737,6 @@ const TodoApp = () => {
   return (
     <div style={styles.app}>
       <div style={styles.container}>
-        {/* Debug Panel */}
-        <div style={styles.debugPanel}>
-          <strong>Debug Log:</strong><br />
-          Current todos count: {todos.length}<br />
-          User ID: {user?.id}<br />
-          Session token: {supabase.auth.session?.access_token ? 'Present' : 'Missing'}<br />
-          
-          {/* Manual test buttons */}
-          <div style={{marginTop: '10px', display: 'flex', gap: '8px'}}>
-            <button 
-              onClick={loadTodos}
-              style={{...styles.authButton, padding: '4px 8px', fontSize: '0.8rem'}}
-            >
-              🔄 Reload Todos
-            </button>
-            <button 
-              onClick={async () => {
-                addDebug('Testing direct fetch...');
-                try {
-                  const url = `${SUPABASE_URL}/rest/v1/todos?select=*&user_id=eq.${user.id}`;
-                  addDebug(`Direct fetch URL: ${url}`);
-                  
-                  const response = await fetch(url, {
-                    headers: {
-                      'apikey': SUPABASE_ANON_KEY,
-                      'Authorization': `Bearer ${supabase.auth.session?.access_token}`
-                    }
-                  });
-                  
-                  addDebug(`Direct fetch status: ${response.status} ${response.statusText}`);
-                  const result = await response.json();
-                  addDebug(`Direct fetch result: ${JSON.stringify(result)}`);
-                } catch (err) {
-                  addDebug(`Direct fetch error: ${err.message}`);
-                }
-              }}
-              style={{...styles.authButton, padding: '4px 8px', fontSize: '0.8rem', backgroundColor: '#dc2626'}}
-            >
-              🧪 Test Direct Fetch
-            </button>
-          </div>
-          <br />
-          {debugInfo}
-        </div>
-
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.userInfo}>
