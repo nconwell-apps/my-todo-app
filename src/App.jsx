@@ -330,7 +330,7 @@ const TodoApp = () => {
       color: 'white',
       border: 'none',
       borderRadius: '8px',
-      padding: '10px 20px',
+      padding: '12px 24px',
       fontWeight: '600',
       cursor: 'pointer',
       display: 'flex',
@@ -1099,7 +1099,7 @@ const TodoApp = () => {
             ) : (
               <>
                 <span style={{fontSize: '1.1rem'}}>+</span>
-                Add
+                Add Item
               </>
             )}
             </button>
@@ -1268,7 +1268,7 @@ const TodoApp = () => {
         {/* Footer */}
         <div style={styles.footer}>
           <p>Built with React + Supabase</p>
-          <p style={{marginTop: '2px'}}>Version 1.0.3</p>
+          <p style={{marginTop: '2px'}}>Version 1.0.4</p>
           <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Built by nconwell 21/08/2025</p>
         </div>
       </div>
