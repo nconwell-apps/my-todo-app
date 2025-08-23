@@ -131,9 +131,11 @@ const TodoApp = () => {
 
   const [todos, setTodos] = useState([]);
   const [newTodo, setNewTodo] = useState('');
+  const [newTodoDueDate, setNewTodoDueDate] = useState('');
   const [filter, setFilter] = useState('all');
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
   const [addingTodo, setAddingTodo] = useState(false);
 
   // Drag and drop state
@@ -298,6 +300,11 @@ const TodoApp = () => {
     },
     inputGroup: {
       display: 'flex',
+      flexDirection: 'column',
+      gap: '12px'
+    },
+    inputRow: {
+      display: 'flex',
       gap: '12px'
     },
     todoInput: {
@@ -308,6 +315,15 @@ const TodoApp = () => {
       padding: '12px 16px',
       color: 'white',
       fontSize: '1rem'
+    },
+    dateInput: {
+      backgroundColor: '#334155',
+      border: '1px solid #475569',
+      borderRadius: '8px',
+      padding: '12px 16px',
+      color: 'white',
+      fontSize: '1rem',
+      minWidth: '150px'
     },
     addButton: {
       backgroundColor: '#0d9488',
@@ -494,7 +510,28 @@ const TodoApp = () => {
       color: '#64748b',
       display: 'flex',
       alignItems: 'center',
+      gap: '4px',
+      marginBottom: '4px'
+    },
+    todoDateDue: {
+      fontSize: '0.75rem',
+      color: '#f59e0b',
+      display: 'flex',
+      alignItems: 'center',
       gap: '4px'
+    },
+    todoDateOverdue: {
+      fontSize: '0.75rem',
+      color: '#ef4444',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      fontWeight: '600'
+    },
+    todoDateContainer: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '2px'
     },
     todoActions: {
       display: 'flex',
@@ -531,6 +568,11 @@ const TodoApp = () => {
       color: '#64748b'
     },
     editGroup: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px'
+    },
+    editRow: {
       display: 'flex',
       gap: '8px',
       alignItems: 'center'
@@ -646,6 +688,23 @@ const TodoApp = () => {
     }
   };
 
+  // Helper function to check if date is overdue
+  const isOverdue = (dueDate) => {
+    if (!dueDate) return false;
+    const today = new Date();
+    const due = new Date(dueDate);
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+    return due < today;
+  };
+
+  // Helper function to format date display
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  };
+
   const addTodo = async () => {
     if (newTodo.trim() && user) {
       setAddingTodo(true);
@@ -659,6 +718,7 @@ const TodoApp = () => {
         priority: 'medium',
         user_id: user.id,
         created_at: new Date().toISOString(),
+        due_date: newTodoDueDate || null,
         order: maxOrder + 1
       };
 
@@ -667,6 +727,7 @@ const TodoApp = () => {
       if (!error) {
         await loadTodos();
         setNewTodo('');
+        setNewTodoDueDate('');
       }
 
       setAddingTodo(false);
@@ -717,20 +778,25 @@ const TodoApp = () => {
     }
   };
 
-  const startEdit = (id, text) => {
+  const startEdit = (id, text, dueDate) => {
     setEditingId(id);
     setEditText(text);
+    setEditDueDate(dueDate || '');
   };
 
   const saveEdit = async () => {
     if (editText.trim()) {
-      const { error } = await supabase.updateTodo(editingId, { text: editText.trim() });
+      const { error } = await supabase.updateTodo(editingId, { 
+        text: editText.trim(),
+        due_date: editDueDate || null
+      });
       if (!error) {
         await loadTodos();
       }
     }
     setEditingId(null);
     setEditText('');
+    setEditDueDate('');
   };
 
   const setPriority = async (id, priority) => {
@@ -985,14 +1051,23 @@ const TodoApp = () => {
         {/* Add Todo */}
         <div style={styles.addTodo}>
           <div style={styles.inputGroup}>
-            <input
-              type="text"
-              value={newTodo}
-              onChange={(e) => setNewTodo(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addTodo()}
-              placeholder="Add a new todo..."
-              style={styles.todoInput}
-            />
+            <div style={styles.inputRow}>
+              <input
+                type="text"
+                value={newTodo}
+                onChange={(e) => setNewTodo(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addTodo()}
+                placeholder="Add a new todo..."
+                style={styles.todoInput}
+              />
+              <input
+                type="date"
+                value={newTodoDueDate}
+                onChange={(e) => setNewTodoDueDate(e.target.value)}
+                style={styles.dateInput}
+                title="Due date (optional)"
+              />
+            </div>
             <button 
               onClick={addTodo} 
               disabled={addingTodo}
@@ -1021,7 +1096,7 @@ const TodoApp = () => {
             ) : (
               <>
                 <span style={{fontSize: '1.25rem'}}>+</span>
-                Add
+                Add Todo
               </>
             )}
             </button>
@@ -1102,17 +1177,27 @@ const TodoApp = () => {
                     <div style={styles.todoTextSection}>
                       {editingId === todo.id ? (
                         <div style={styles.editGroup}>
-                          <input
-                            type="text"
-                            value={editText}
-                            onChange={(e) => setEditText(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
-                            style={styles.editInput}
-                            autoFocus
-                          />
-                          <button onClick={saveEdit} style={styles.actionButton}>
-                            💾
-                          </button>
+                          <div style={styles.editRow}>
+                            <input
+                              type="text"
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
+                              style={styles.editInput}
+                              autoFocus
+                              placeholder="Edit todo text"
+                            />
+                            <input
+                              type="date"
+                              value={editDueDate}
+                              onChange={(e) => setEditDueDate(e.target.value)}
+                              style={{...styles.editInput, minWidth: '140px'}}
+                              title="Due date"
+                            />
+                            <button onClick={saveEdit} style={styles.actionButton}>
+                              💾
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div style={styles.todoMain}>
@@ -1134,9 +1219,21 @@ const TodoApp = () => {
                         </div>
                       )}
                       
-                      {/* Date */}
-                      <div style={styles.todoDate}>
-                        📅 {new Date(todo.created_at).toLocaleDateString()}
+                      {/* Dates */}
+                      <div style={styles.todoDateContainer}>
+                        <div style={styles.todoDate}>
+                          📅 Created: {formatDateDisplay(todo.created_at)}
+                        </div>
+                        {todo.due_date && (
+                          <div style={
+                            isOverdue(todo.due_date) && !todo.completed 
+                              ? styles.todoDateOverdue 
+                              : styles.todoDateDue
+                          }>
+                            ⏰ Due: {formatDateDisplay(todo.due_date)}
+                            {isOverdue(todo.due_date) && !todo.completed && ' (OVERDUE)'}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1144,7 +1241,7 @@ const TodoApp = () => {
                     <div style={styles.todoActions}>
                       {!todo.completed && (
                         <button
-                          onClick={() => startEdit(todo.id, todo.text)}
+                          onClick={() => startEdit(todo.id, todo.text, todo.due_date)}
                           style={styles.actionButton}
                         >
                           ✏️
@@ -1168,7 +1265,7 @@ const TodoApp = () => {
         {/* Footer */}
         <div style={styles.footer}>
           <p>Built with React + Supabase</p>
-          <p style={{marginTop: '2px'}}>Version 1.0.1</p>
+          <p style={{marginTop: '2px'}}>Version 1.0.2</p>
           <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Built by nconwell 21/08/2025</p>
         </div>
       </div>
