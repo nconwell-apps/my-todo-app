@@ -330,14 +330,17 @@ const TodoApp = () => {
       color: 'white',
       border: 'none',
       borderRadius: '8px',
-      padding: '12px 24px',
+      padding: '10px 20px',
       fontWeight: '600',
       cursor: 'pointer',
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
-      fontSize: '1rem',
-      transition: 'background-color 0.2s ease, transform 0.1s ease'
+      justifyContent: 'center',
+      gap: '6px',
+      fontSize: '0.9rem',
+      transition: 'background-color 0.2s ease, transform 0.1s ease',
+      alignSelf: 'center',
+      minWidth: '100px'
     },
     filters: {
       display: 'flex',
@@ -1095,8 +1098,8 @@ const TodoApp = () => {
               </>
             ) : (
               <>
-                <span style={{fontSize: '1.25rem'}}>+</span>
-                Add Todo
+                <span style={{fontSize: '1.1rem'}}>+</span>
+                Add
               </>
             )}
             </button>
@@ -1265,7 +1268,7 @@ const TodoApp = () => {
         {/* Footer */}
         <div style={styles.footer}>
           <p>Built with React + Supabase</p>
-          <p style={{marginTop: '2px'}}>Version 1.0.2</p>
+          <p style={{marginTop: '2px'}}>Version 1.0.3</p>
           <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Built by nconwell 21/08/2025</p>
         </div>
       </div>
