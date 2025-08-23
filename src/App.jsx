@@ -140,6 +140,9 @@ const TodoApp = () => {
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
+  // Animation state
+  const [completingItems, setCompletingItems] = useState(new Set());
+
   // Styles
   const styles = {
     app: {
@@ -401,6 +404,16 @@ const TodoApp = () => {
       padding: '16px',
       borderTop: '3px solid #14b8a6',
       transform: 'translateY(4px)'
+    },
+    todoItemCompleting: {
+      backgroundColor: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: '8px',
+      padding: '16px',
+      transform: 'translateX(100%) scale(0.8)',
+      opacity: 0,
+      transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflow: 'hidden'
     },
     todoContent: {
       display: 'flex',
@@ -664,13 +677,36 @@ const TodoApp = () => {
     const todo = todos.find(t => t.id === id);
     if (!todo) return;
 
-    const { error } = await supabase.updateTodo(id, { completed: !todo.completed });
-
-    if (!error) {
-      if (!todo.completed) {
-        playCompletionSound();
+    // If completing (not uncompleting), start the animation
+    if (!todo.completed) {
+      setCompletingItems(prev => new Set([...prev, id]));
+      
+      // Play completion sound immediately
+      playCompletionSound();
+      
+      // Wait for animation to complete before updating database
+      setTimeout(async () => {
+        const { error } = await supabase.updateTodo(id, { completed: true });
+        
+        if (!error) {
+          await loadTodos();
+        }
+        
+        // Remove from completing items
+        setCompletingItems(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+      }, 600); // Match the animation duration
+      
+    } else {
+      // If uncompleting, update immediately without animation
+      const { error } = await supabase.updateTodo(id, { completed: false });
+      
+      if (!error) {
+        await loadTodos();
       }
-      await loadTodos();
     }
   };
 
@@ -1017,10 +1053,13 @@ const TodoApp = () => {
             filteredTodos.map((todo, index) => {
               const isDragging = draggedItem && draggedItem.index === index;
               const isDragOver = dragOverIndex === index;
+              const isCompleting = completingItems.has(todo.id);
               
               let itemStyle = todo.completed ? styles.todoItemCompleted : styles.todoItem;
               
-              if (isDragging) {
+              if (isCompleting) {
+                itemStyle = styles.todoItemCompleting;
+              } else if (isDragging) {
                 itemStyle = todo.completed ? styles.todoItemCompletedDragging : styles.todoItemDragging;
               } else if (isDragOver) {
                 itemStyle = todo.completed ? styles.todoItemCompletedDragOver : styles.todoItemDragOver;
@@ -1029,12 +1068,12 @@ const TodoApp = () => {
               return (
                 <div
                   key={todo.id}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, todo, index)}
-                  onDragOver={(e) => handleDragOver(e, index)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, index)}
-                  onDragEnd={handleDragEnd}
+                  draggable={!isCompleting}
+                  onDragStart={(e) => !isCompleting && handleDragStart(e, todo, index)}
+                  onDragOver={(e) => !isCompleting && handleDragOver(e, index)}
+                  onDragLeave={!isCompleting ? handleDragLeave : undefined}
+                  onDrop={(e) => !isCompleting && handleDrop(e, index)}
+                  onDragEnd={!isCompleting ? handleDragEnd : undefined}
                   style={itemStyle}
                 >
                   <div style={styles.todoContent}>
@@ -1049,9 +1088,14 @@ const TodoApp = () => {
                     {/* Checkbox */}
                     <button
                       onClick={() => toggleTodo(todo.id)}
-                      style={todo.completed ? styles.checkboxChecked : styles.checkbox}
+                      disabled={isCompleting}
+                      style={{
+                        ...(todo.completed ? styles.checkboxChecked : styles.checkbox),
+                        ...(isCompleting ? { cursor: 'not-allowed', opacity: 0.7 } : {})
+                      }}
                     >
                       {todo.completed && <span style={{color: 'white', fontWeight: 'bold', fontSize: '0.875rem'}}>✓</span>}
+                      {isCompleting && !todo.completed && <span style={{color: '#14b8a6', fontWeight: 'bold', fontSize: '0.875rem'}}>✓</span>}
                     </button>
 
                     {/* Todo Text */}
@@ -1124,6 +1168,7 @@ const TodoApp = () => {
         {/* Footer */}
         <div style={styles.footer}>
           <p>Built with React + Supabase</p>
+          <p style={{marginTop: '4px'}}>Version 1.0.1</p>
           <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Built by nconwell 21/08/2025</p>
         </div>
       </div>
