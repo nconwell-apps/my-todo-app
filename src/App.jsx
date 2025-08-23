@@ -1168,7 +1168,7 @@ const TodoApp = () => {
         {/* Footer */}
         <div style={styles.footer}>
           <p>Built with React + Supabase</p>
-          <p style={{marginTop: '4px'}}>Version 1.0.1</p>
+          <p style={{marginTop: '2px'}}>Version 1.0.1</p>
           <p style={{fontSize: '0.75rem', marginTop: '4px'}}>Built by nconwell 21/08/2025</p>
         </div>
       </div>
