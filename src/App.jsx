@@ -104,6 +104,17 @@ class SupabaseClient {
     });
     return { error: response.ok ? null : await response.json() };
   }
+
+  async getTodos(userId) {
+    const response = await fetch(`${this.url}/rest/v1/todos?select=*&user_id=eq.${userId}&order=order.asc.nullsfirst,created_at.desc`, {
+      headers: {
+        'apikey': this.key,
+        'Authorization': `Bearer ${this.auth.session?.access_token}`
+      }
+    });
+    const result = await response.json();
+    return { data: result, error: response.ok ? null : result };
+  }
 }
 
 // Initialize Supabase client
@@ -124,6 +135,10 @@ const TodoApp = () => {
   const [editingId, setEditingId] = useState(null);
   const [editText, setEditText] = useState('');
   const [addingTodo, setAddingTodo] = useState(false);
+
+  // Drag and drop state
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
 
   // Styles
   const styles = {
@@ -339,18 +354,71 @@ const TodoApp = () => {
       backgroundColor: '#1e293b',
       border: '1px solid #334155',
       borderRadius: '8px',
-      padding: '16px'
+      padding: '16px',
+      transition: 'all 0.2s ease'
     },
     todoItemCompleted: {
       backgroundColor: 'rgba(16, 185, 129, 0.05)',
       border: '1px solid rgba(16, 185, 129, 0.3)',
       borderRadius: '8px',
-      padding: '16px'
+      padding: '16px',
+      transition: 'all 0.2s ease'
+    },
+    todoItemDragging: {
+      backgroundColor: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: '8px',
+      padding: '16px',
+      opacity: 0.5,
+      transform: 'rotate(2deg)',
+      cursor: 'grabbing',
+      zIndex: 1000,
+      boxShadow: '0 8px 25px rgba(0, 0, 0, 0.3)'
+    },
+    todoItemCompletedDragging: {
+      backgroundColor: 'rgba(16, 185, 129, 0.05)',
+      border: '1px solid rgba(16, 185, 129, 0.3)',
+      borderRadius: '8px',
+      padding: '16px',
+      opacity: 0.5,
+      transform: 'rotate(2deg)',
+      cursor: 'grabbing',
+      zIndex: 1000,
+      boxShadow: '0 8px 25px rgba(0, 0, 0, 0.3)'
+    },
+    todoItemDragOver: {
+      backgroundColor: '#1e293b',
+      border: '1px solid #334155',
+      borderRadius: '8px',
+      padding: '16px',
+      borderTop: '3px solid #14b8a6',
+      transform: 'translateY(4px)'
+    },
+    todoItemCompletedDragOver: {
+      backgroundColor: 'rgba(16, 185, 129, 0.05)',
+      border: '1px solid rgba(16, 185, 129, 0.3)',
+      borderRadius: '8px',
+      padding: '16px',
+      borderTop: '3px solid #14b8a6',
+      transform: 'translateY(4px)'
     },
     todoContent: {
       display: 'flex',
       alignItems: 'flex-start',
       gap: '16px'
+    },
+    dragHandle: {
+      cursor: 'grab',
+      color: '#64748b',
+      fontSize: '1.2rem',
+      padding: '4px',
+      userSelect: 'none',
+      display: 'flex',
+      alignItems: 'center'
+    },
+    dragHandleActive: {
+      cursor: 'grabbing',
+      color: '#14b8a6'
     },
     checkbox: {
       width: '24px',
@@ -469,30 +537,30 @@ const TodoApp = () => {
       fontSize: '1.5rem'
     },
     spinner: {
-  width: '16px',
-  height: '16px',
-  border: '2px solid transparent',
-  borderTop: '2px solid currentColor',
-  borderRadius: '50%',
-  animation: 'spin 1s linear infinite'
-},
+      width: '16px',
+      height: '16px',
+      border: '2px solid transparent',
+      borderTop: '2px solid currentColor',
+      borderRadius: '50%',
+      animation: 'spin 1s linear infinite'
+    },
   };
 
   // Add spinner animation
-const spinnerKeyframes = `
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-`;
+  const spinnerKeyframes = `
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `;
 
-// Inject the keyframes into the document
-if (typeof document !== 'undefined' && !document.getElementById('spinner-styles')) {
-  const style = document.createElement('style');
-  style.id = 'spinner-styles';
-  style.textContent = spinnerKeyframes;
-  document.head.appendChild(style);
-}
+  // Inject the keyframes into the document
+  if (typeof document !== 'undefined' && !document.getElementById('spinner-styles')) {
+    const style = document.createElement('style');
+    style.id = 'spinner-styles';
+    style.textContent = spinnerKeyframes;
+    document.head.appendChild(style);
+  }
 
   // Check for existing session on mount
   useEffect(() => {
@@ -550,17 +618,9 @@ if (typeof document !== 'undefined' && !document.getElementById('spinner-styles'
     if (!user) return;
     
     try {
-      const url = `${SUPABASE_URL}/rest/v1/todos?select=*&user_id=eq.${user.id}&order=created_at.desc`;
+      const { data, error } = await supabase.getTodos(user.id);
       
-      const response = await fetch(url, {
-        headers: {
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${supabase.auth.session?.access_token}`
-        }
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
+      if (!error) {
         setTodos(data);
       } else {
         console.error('Failed to load todos');
@@ -575,14 +635,18 @@ if (typeof document !== 'undefined' && !document.getElementById('spinner-styles'
 
   const addTodo = async () => {
     if (newTodo.trim() && user) {
-      setAddingTodo(true);  // Start loading
+      setAddingTodo(true);
+
+      // Get the highest order value and add 1
+      const maxOrder = todos.length > 0 ? Math.max(...todos.map(t => t.order || 0)) : 0;
 
       const todo = {
         text: newTodo.trim(),
         completed: false,
         priority: 'medium',
         user_id: user.id,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        order: maxOrder + 1
       };
 
       const { data, error } = await supabase.insertTodo(todo);
@@ -592,7 +656,7 @@ if (typeof document !== 'undefined' && !document.getElementById('spinner-styles'
         setNewTodo('');
       }
 
-      setAddingTodo(false);  // Stop loading
+      setAddingTodo(false);
     }
   };
 
@@ -640,43 +704,113 @@ if (typeof document !== 'undefined' && !document.getElementById('spinner-styles'
     }
   };
 
+  // Drag and drop functions
+  const handleDragStart = (e, todo, index) => {
+    setDraggedItem({ todo, index });
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.outerHTML);
+    e.dataTransfer.setDragImage(e.target, e.target.offsetWidth / 2, e.target.offsetHeight / 2);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    
+    if (draggedItem && draggedItem.index !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setDragOverIndex(null);
+    }
+  };
+
+  const handleDrop = async (e, dropIndex) => {
+    e.preventDefault();
+    setDragOverIndex(null);
+    
+    if (!draggedItem || draggedItem.index === dropIndex) {
+      setDraggedItem(null);
+      return;
+    }
+
+    const newTodos = [...filteredTodos];
+    const draggedTodo = newTodos[draggedItem.index];
+    
+    // Remove the dragged item
+    newTodos.splice(draggedItem.index, 1);
+    
+    // Insert it at the new position
+    newTodos.splice(dropIndex, 0, draggedTodo);
+    
+    // Update the order in the database
+    await updateTodoOrder(newTodos);
+    
+    setDraggedItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverIndex(null);
+  };
+
+  const updateTodoOrder = async (orderedTodos) => {
+    try {
+      // Update each todo with its new order
+      const updatePromises = orderedTodos.map((todo, index) => 
+        supabase.updateTodo(todo.id, { order: index })
+      );
+      
+      await Promise.all(updatePromises);
+      await loadTodos();
+    } catch (error) {
+      console.error('Failed to update todo order:', error);
+    }
+  };
+
   // Play completion sound
   const playCompletionSound = () => {
-  try {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // First quick swoosh
-    const osc1 = audioContext.createOscillator();
-    const gain1 = audioContext.createGain();
-    osc1.connect(gain1);
-    gain1.connect(audioContext.destination);
-    
-    osc1.frequency.setValueAtTime(800, audioContext.currentTime);
-    osc1.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.15);
-    gain1.gain.setValueAtTime(0.15, audioContext.currentTime);
-    gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
-    osc1.type = 'sine';
-    osc1.start(audioContext.currentTime);
-    osc1.stop(audioContext.currentTime + 0.15);
-    
-    // Second slower swoosh
-    const osc2 = audioContext.createOscillator();
-    const gain2 = audioContext.createGain();
-    osc2.connect(gain2);
-    gain2.connect(audioContext.destination);
-    
-    osc2.frequency.setValueAtTime(500, audioContext.currentTime + 0.1);
-    osc2.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.5);
-    gain2.gain.setValueAtTime(0, audioContext.currentTime + 0.1);
-    gain2.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.15);
-    gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-    osc2.type = 'triangle';
-    osc2.start(audioContext.currentTime + 0.1);
-    osc2.stop(audioContext.currentTime + 0.5);
-  } catch (error) {
-    console.log('Audio playback failed:', error);
-  }
-};
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // First quick swoosh
+      const osc1 = audioContext.createOscillator();
+      const gain1 = audioContext.createGain();
+      osc1.connect(gain1);
+      gain1.connect(audioContext.destination);
+      
+      osc1.frequency.setValueAtTime(800, audioContext.currentTime);
+      osc1.frequency.exponentialRampToValueAtTime(400, audioContext.currentTime + 0.15);
+      gain1.gain.setValueAtTime(0.15, audioContext.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+      osc1.type = 'sine';
+      osc1.start(audioContext.currentTime);
+      osc1.stop(audioContext.currentTime + 0.15);
+      
+      // Second slower swoosh
+      const osc2 = audioContext.createOscillator();
+      const gain2 = audioContext.createGain();
+      osc2.connect(gain2);
+      gain2.connect(audioContext.destination);
+      
+      osc2.frequency.setValueAtTime(500, audioContext.currentTime + 0.1);
+      osc2.frequency.exponentialRampToValueAtTime(150, audioContext.currentTime + 0.5);
+      gain2.gain.setValueAtTime(0, audioContext.currentTime + 0.1);
+      gain2.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+      osc2.type = 'triangle';
+      osc2.start(audioContext.currentTime + 0.1);
+      osc2.stop(audioContext.currentTime + 0.5);
+    } catch (error) {
+      console.log('Audio playback failed:', error);
+    }
+  };
 
   const filteredTodos = todos.filter(todo => {
     switch (filter) {
@@ -880,83 +1014,110 @@ if (typeof document !== 'undefined' && !document.getElementById('spinner-styles'
               <p style={styles.emptySubtitle}>Add a new todo to get started!</p>
             </div>
           ) : (
-            filteredTodos.map(todo => (
-              <div
-                key={todo.id}
-                style={todo.completed ? styles.todoItemCompleted : styles.todoItem}
-              >
-                <div style={styles.todoContent}>
-                  {/* Checkbox */}
-                  <button
-                    onClick={() => toggleTodo(todo.id)}
-                    style={todo.completed ? styles.checkboxChecked : styles.checkbox}
-                  >
-                    {todo.completed && <span style={{color: 'white', fontWeight: 'bold', fontSize: '0.875rem'}}>✓</span>}
-                  </button>
+            filteredTodos.map((todo, index) => {
+              const isDragging = draggedItem && draggedItem.index === index;
+              const isDragOver = dragOverIndex === index;
+              
+              let itemStyle = todo.completed ? styles.todoItemCompleted : styles.todoItem;
+              
+              if (isDragging) {
+                itemStyle = todo.completed ? styles.todoItemCompletedDragging : styles.todoItemDragging;
+              } else if (isDragOver) {
+                itemStyle = todo.completed ? styles.todoItemCompletedDragOver : styles.todoItemDragOver;
+              }
+              
+              return (
+                <div
+                  key={todo.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, todo, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragEnd={handleDragEnd}
+                  style={itemStyle}
+                >
+                  <div style={styles.todoContent}>
+                    {/* Drag Handle */}
+                    <div 
+                      style={isDragging ? styles.dragHandleActive : styles.dragHandle}
+                      onMouseDown={() => {}}
+                    >
+                      ⋮⋮
+                    </div>
 
-                  {/* Todo Text */}
-                  <div style={styles.todoTextSection}>
-                    {editingId === todo.id ? (
-                      <div style={styles.editGroup}>
-                        <input
-                          type="text"
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
-                          style={styles.editInput}
-                          autoFocus
-                        />
-                        <button onClick={saveEdit} style={styles.actionButton}>
-                          💾
-                        </button>
+                    {/* Checkbox */}
+                    <button
+                      onClick={() => toggleTodo(todo.id)}
+                      style={todo.completed ? styles.checkboxChecked : styles.checkbox}
+                    >
+                      {todo.completed && <span style={{color: 'white', fontWeight: 'bold', fontSize: '0.875rem'}}>✓</span>}
+                    </button>
+
+                    {/* Todo Text */}
+                    <div style={styles.todoTextSection}>
+                      {editingId === todo.id ? (
+                        <div style={styles.editGroup}>
+                          <input
+                            type="text"
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            onKeyPress={(e) => e.key === 'Enter' && saveEdit()}
+                            style={styles.editInput}
+                            autoFocus
+                          />
+                          <button onClick={saveEdit} style={styles.actionButton}>
+                            💾
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={styles.todoMain}>
+                          <span style={todo.completed ? styles.todoTextCompleted : styles.todoText}>
+                            {todo.text}
+                          </span>
+                          
+                          {/* Priority */}
+                          <select
+                            value={todo.priority}
+                            onChange={(e) => setPriority(todo.id, e.target.value)}
+                            style={styles.priority}
+                            disabled={todo.completed}
+                          >
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                          </select>
+                        </div>
+                      )}
+                      
+                      {/* Date */}
+                      <div style={styles.todoDate}>
+                        📅 {new Date(todo.created_at).toLocaleDateString()}
                       </div>
-                    ) : (
-                      <div style={styles.todoMain}>
-                        <span style={todo.completed ? styles.todoTextCompleted : styles.todoText}>
-                          {todo.text}
-                        </span>
-                        
-                        {/* Priority */}
-                        <select
-                          value={todo.priority}
-                          onChange={(e) => setPriority(todo.id, e.target.value)}
-                          style={styles.priority}
-                          disabled={todo.completed}
+                    </div>
+
+                    {/* Actions */}
+                    <div style={styles.todoActions}>
+                      {!todo.completed && (
+                        <button
+                          onClick={() => startEdit(todo.id, todo.text)}
+                          style={styles.actionButton}
                         >
-                          <option value="high">High</option>
-                          <option value="medium">Medium</option>
-                          <option value="low">Low</option>
-                        </select>
-                      </div>
-                    )}
-                    
-                    {/* Date */}
-                    <div style={styles.todoDate}>
-                      📅 {new Date(todo.created_at).toLocaleDateString()}
+                          ✏️
+                        </button>
+                      )}
+                      
+                      <button
+                        onClick={() => deleteTodo(todo.id)}
+                        style={{...styles.actionButton, fontSize: '1.25rem', fontWeight: 'bold'}}
+                      >
+                        ×
+                      </button>
                     </div>
                   </div>
-
-                  {/* Actions */}
-                  <div style={styles.todoActions}>
-                    {!todo.completed && (
-                      <button
-                        onClick={() => startEdit(todo.id, todo.text)}
-                        style={styles.actionButton}
-                      >
-                        ✏️
-                      </button>
-                    )}
-                    
-                    <button
-                      onClick={() => deleteTodo(todo.id)}
-                      style={{...styles.actionButton, fontSize: '1.25rem', fontWeight: 'bold'}}
-                    >
-                      ×
-                    </button>
-                  </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
